@@ -1,0 +1,11 @@
+[project]
+name = "db-game"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.10.3",
+    "mysql-connector-python>=9.3.0",
+    "pygame>=2.6.1",
+]
