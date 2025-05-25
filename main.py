@@ -413,7 +413,7 @@ def canRecapture(xd, yd, piecesList):
                 available.append((sx, sy, thePiece, mid))
 
     else:  
-        
+
         mid = isSpotEmpty(piecesList, px+1, py-1)
         if mid is not True and getColor(piecesList, px+1, py-1) == 'white' and isSpotEmpty(piecesList, px+2, py-2) == True:
             sx = BOARD_X + (px+2)*CUBE_SIZE + 5
@@ -495,15 +495,17 @@ def startGame(piecesList,loaded,turn = 1):
 
                 for click in availablePlaces:
                     if pygame.Rect(click[0], click[1], CUBE_SIZE, CUBE_SIZE).collidepoint(pos):
+                        lastMoveCap = False
                         if click[3]:  
                             piecesList.remove(click[3])
+                            lastMoveCap=True
                         click[2].x = click[0] + 5
                         click[2].y = click[1] + 5
                         move_sound.play()
-                        
-                        extraMove = canRecapture(click[2].x,click[2].y,piecesList)
-                        print(str(extraMove))
-                        
+                        extraMove = []
+                        if lastMoveCap == True:                       
+                            extraMove = canRecapture(click[2].x,click[2].y,piecesList)
+                            
                         if extraMove == []:
                             turn *= -1
                         moved = True
