@@ -1,7 +1,6 @@
 from mysql import connector
 from dao import *
 import pygame
-import json
 
 pygame.init()
 pygame.mixer.init()
@@ -10,7 +9,7 @@ clickSound = pygame.mixer.Sound("./assets/clickSound.wav")
 clock = pygame.time.Clock()
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-FRAME_WIDTH = 600
+FRAME_WIDTH = 620
 FRAME_HEIGHT = 513
 BOARD_X = 115
 BOARD_Y = 69
@@ -57,10 +56,13 @@ selectedBlackPromo = pygame.image.load("./assets/selectedBlackPromo.png").conver
 selectedBlackPromo = pygame.transform.scale(selectedBlackPromo, (40, 40))
 
 frameEnd = pygame.image.load("./assets/endingFrame.png").convert_alpha()
-frameEnd = pygame.transform.scale(frameEnd, (600, 400))
+frameEnd = pygame.transform.scale(frameEnd, (650, 400))
 
 menuFrame = pygame.image.load("./assets/menuFrame.png").convert_alpha()
 menuFrame = pygame.transform.scale(menuFrame, (400, 350))
+
+leaderBoardFrame = pygame.transform.rotate(frameEnd, 90)
+leaderBoardFrame = pygame.transform.scale(leaderBoardFrame, (400, 590))
 
 def getConnection():
     return connector.connect(
@@ -256,7 +258,7 @@ def selectedPiece(pos,piecesList,turn):
 
     return []
                 
-def checkGameOver(piecesList):
+def checkGameOver(piecesList,whitePlayer,blackPlayer):
     white = 0
     black = 0 
     quit = False
@@ -266,22 +268,47 @@ def checkGameOver(piecesList):
         else:
             black += 1
     if black == 0 or white == 0:
+        if black == 0:
+            if whitePlayer != 'Guest1':
+                try:
+                    score = getByName(whitePlayer,con)[2]
+                    update(whitePlayer,score+1,con)
+                except Exception as e:
+                    print(e)    
+                    exit(0)
+            winner = font.render('Congragulation sir',True,(0,0,0))   
+            winnerAnnouce = font.render(f'{whitePlayer} you won',True,(0,0,0))
+        
+        if white == 0:
+            if blackPlayer != 'Guest2': 
+                try:   
+                    score = getByName(blackPlayer,con)[2]
+                    update(blackPlayer,score+1,con)
+                except Exception as e:
+                    print(e)
+                    exit(0)
+            winner = font.render('Congragulation sir',True,(0,0,0))
+            winnerAnnouce = font.render(f'{whitePlayer} you won',True,(0,0,0))    
         while quit == False:
             screen.blit(background,(0,0))
-            screen.blit(frameEnd,(100,100))
+            screen.blit(frameEnd,(75,100))
+            screen.blit(winner,(270,250))
+            screen.blit(winnerAnnouce,(290,300))
             for event in pygame.event.get():
                 if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.QUIT:
                     quit = True
-
             pygame.display.update()        
         return True
     return False
 
-def saveGame(piecesList,turn):
+def saveGame(piecesList,turn,whitePlayer,blackPlayer):
     
     with open('data.txt','w') as f:
 
         f.write(str(turn) + '\n')
+        f.write(whitePlayer + '\n')
+        f.write(blackPlayer + '\n')
+
 
         for piece in piecesList:
             f.write(str(piece.color) + '\n')
@@ -292,6 +319,8 @@ def saveGame(piecesList,turn):
 def loadGame():
     with open('data.txt','r')as f:
         turn = int(f.readline().strip())
+        whitePlayer = f.readline().strip()
+        blackPlayer = f.readline().strip()
         piecesList= []
 
         while True:
@@ -300,7 +329,7 @@ def loadGame():
                 break
             x = int(f.readline().strip())
             y = int(f.readline().strip())
-            promoted = f.readline().strip() == True
+            promoted = f.readline().strip() == "True"
 
             if color == 'white':
                 image = promoWhite if promoted == 'True' else whitePiece
@@ -311,59 +340,7 @@ def loadGame():
             piece.promoted = promoted
             piecesList.append(piece)
 
-    return startGame(piecesList,True,turn)
-
-
-    x = (xd - BOARD_X) // CUBE_SIZE
-    y = (yd - BOARD_Y) // CUBE_SIZE  
-
-    availablePlaces = []
-
-    for piece in piecesList:
-        if piece.xInBoard == x and piece.yInBoard == y :
-            break
-
-    if piece != None:
-        if piece.color == 'white':
-            if isSpotEmpty(piecesList,piece.xInBoard + 1 ,piece.yInBoard + 1) == False and getColor(piecesList,piece.xInBoard + 1 ,piece.yInBoard + 1) == 'black' and isSpotEmpty(piecesList,piece.xInBoard + 2 ,piece.yInBoard + 2) == True:
-                availablePlaces.append((piece.xInBoard + 2 ,piece.yInBoard + 2))
-                square = pygame.Rect((xd+110,piece.y+110,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-            if isSpotEmpty(piecesList,piece.xInBoard - 1 ,piece.yInBoard + 1) == False and getColor(piecesList,piece.xInBoard - 1 ,piece.yInBoard + 1) == 'black' and isSpotEmpty(piecesList,piece.xInBoard - 2 ,piece.yInBoard + 2) == True:
-                availablePlaces.append((piece.xInBoard - 2 ,piece.yInBoard + 2))
-                square = pygame.Rect((piece.x-110,piece.y+110,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-            if piece.promoted == True:
-                if isSpotEmpty(piecesList,piece.xInBoard + 1 ,piece.yInBoard - 1) == False and getColor(piecesList,piece.xInBoard + 1 ,piece.yInBoard - 1) == 'black' and isSpotEmpty(piecesList,piece.xInBoard + 2 ,piece.yInBoard - 2) == True:
-                    availablePlaces.append((piece.xInBoard + 2 ,piece.yInBoard - 2))
-                    square = pygame.Rect((piece.x+110,piece.y-110,CUBE_SIZE,CUBE_SIZE))
-                    pygame.draw.rect(screen,(000,128,000), square)
-                if isSpotEmpty(piecesList,piece.xInBoard - 1 ,piece.yInBoard - 1) == False and getColor(piecesList,piece.xInBoard - 1 ,piece.yInBoard - 1) == 'black' and isSpotEmpty(piecesList,piece.xInBoard - 2 ,piece.yInBoard - 2) == True:
-                    availablePlaces.append((piece.xInBoard - 2 ,piece.yInBoard - 2))
-                    square = pygame.Rect((piece.x-110,piece.y-110,CUBE_SIZE,CUBE_SIZE))
-                    pygame.draw.rect(screen,(000,128,000), square)
-        else:
-
-            if isSpotEmpty(piecesList,piece.xInBoard + 1 ,piece.yInBoard - 1) == False and getColor(piecesList,piece.xInBoard + 1 ,piece.yInBoard - 1) == 'white' and isSpotEmpty(piecesList,piece.xInBoard + 2 ,piece.yInBoard - 2) == True:
-                availablePlaces.append((piece.xInBoard + 2 ,piece.yInBoard - 2))
-                square = pygame.Rect((piece.x+110,piece.y-110,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-            if isSpotEmpty(piecesList,piece.xInBoard - 1 ,piece.yInBoard - 1) == False and getColor(piecesList,piece.xInBoard - 1 ,piece.yInBoard - 1) == 'white' and isSpotEmpty(piecesList,piece.xInBoard - 2 ,piece.yInBoard - 2) == True:
-                availablePlaces.append((piece.xInBoard - 2 ,piece.yInBoard - 2))
-                square = pygame.Rect((piece.x-110,piece.y-110,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-
-            if piece.promoted == True:
-                if isSpotEmpty(piecesList,piece.xInBoard + 1 ,piece.yInBoard + 1) == False and getColor(piecesList,piece.xInBoard + 1 ,piece.yInBoard + 1) == 'white' and isSpotEmpty(piecesList,piece.xInBoard + 2 ,piece.yInBoard + 2,piecesList) == True:
-                    availablePlaces.append((piece.xInBoard + 2 ,piece.yInBoard + 2))
-                    square = pygame.Rect((piece.x+110,piece.y+110,CUBE_SIZE,CUBE_SIZE))
-                    pygame.draw.rect(screen,(000,128,000), square)
-                if isSpotEmpty(piecesList,piece.xInBoard - 1 ,piece.yInBoard + 1) == False and getColor(piecesList,piece.xInBoard - 1 ,piece.yInBoard + 1) == 'white' and isSpotEmpty(piecesList,piece.xInBoard - 2 ,piece.yInBoard + 2,piecesList) == True:
-                    availablePlaces.append((piece.xInBoard - 2 ,piece.yInBoard + 2))
-                    square = pygame.Rect((piece.x-110,piece.y+110,CUBE_SIZE,CUBE_SIZE))
-                    pygame.draw.rect(screen,(000,128,000), square)
-
-    return availablePlaces
+    return startGame(piecesList,True,turn,whitePlayer,blackPlayer)
 
 def canRecapture(xd, yd, piecesList):
 
@@ -445,9 +422,25 @@ def canRecapture(xd, yd, piecesList):
 
     return available
 
-def startGame(piecesList,loaded,turn = 1):
+def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'Guest2'):
     saveButton = pygame.Rect(700, 20, 200, 50)
     saveText = font.render("Save", True, (200,0,0))
+
+    whiteText = font.render(whitePlayer, True, (240,240,240))
+    blackText = font.render(blackPlayer, True, (240,240,240))
+
+    try:
+        if whitePlayer != 'Guest1': 
+            score = getByName(whitePlayer,con)[2]
+            whiteScore = 'Score : '+ str(score) 
+            whiteScore = font.render(whiteScore,True, (240,240,240))
+        
+        if blackPlayer != 'Guest2':
+            score = getByName(blackPlayer,con)[2]
+            blackScore = 'Score : '+ str(score) 
+            blackScore = font.render(blackScore,True,(240,240,240))
+    except Exception as e:
+        print(e)
     if loaded == False:   
         screen.blit(background, (0, 0))
         screen.blit(frame, (100, -30))
@@ -462,6 +455,12 @@ def startGame(piecesList,loaded,turn = 1):
         screen.blit(background, (0, 0))
         screen.blit(frame, (100, -30))
         screen.blit(saveText,(700,20))
+        screen.blit(whiteText,(BOARD_X+420,BOARD_Y+20))
+        screen.blit(blackText,(BOARD_X+420,BOARD_Y+345))
+        if whitePlayer != 'Guest1':
+            screen.blit(whiteScore,(BOARD_X+420,BOARD_Y+65))
+        if blackPlayer != 'Guest2':
+            screen.blit(blackScore,(BOARD_X+420,BOARD_Y+300))
         draw_board(BOARD_X, BOARD_Y)  
         
         for piece in piecesList:
@@ -490,7 +489,7 @@ def startGame(piecesList,loaded,turn = 1):
                 moved = False
                 
                 if saveButton.collidepoint(pos):
-                    saveGame(piecesList,turn)
+                    saveGame(piecesList,turn,whitePlayer,blackPlayer)
                     return True
 
                 for click in availablePlaces:
@@ -519,9 +518,260 @@ def startGame(piecesList,loaded,turn = 1):
         pygame.display.update()       
         clock.tick(60) 
 
-        game_end = checkGameOver(piecesList)
+        game_end = checkGameOver(piecesList,whitePlayer,blackPlayer)
     
     pygame.quit()
+
+def checkPlayers(whitePlayer,blackPlayer):
+    running = True
+    try:
+        if whitePlayer != 'Guest1':
+            if getByName(whitePlayer,con):
+                print(f'Welcom back sir {whitePlayer}')
+            else: 
+                create((whitePlayer,0),con)
+        if blackPlayer != 'Guest2' :
+            if getByName(blackPlayer,con):
+                print(f'Welcom back sir {blackPlayer}')
+            else: 
+                create((blackPlayer,0),con)       
+    except Exception as e:
+        print(e)
+        exit(0)   
+    return
+
+def provideName():
+
+    running = True
+    box2 = pygame.Rect(250,320,200,40)
+    box1 = pygame.Rect(250,230,200,40)
+    color_inactive = pygame.Color('white')
+    color_active = pygame.Color('black')
+    color1 = color_inactive
+    color2 = color_inactive
+    text_Box1=''
+    text_Box2=''
+    active1 = False
+    active2 = False
+
+    while running:
+        screen.blit(background,(0,0))
+        screen.blit(frameEnd,(75,100))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                exit(0)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+
+                if box1.collidepoint(event.pos):
+                    color1 = color_active
+                    color2 = color_inactive
+                    active1 = True
+                    active2 = False
+                elif box2.collidepoint(event.pos):
+                    color2 = color_active
+                    color1 = color_inactive
+                    active1 = False
+                    active2 = True
+                else:
+                    color1 = color_inactive
+                    color2 = color_inactive
+                    active1 = False
+                    active2 = False
+
+            elif event.type == pygame.KEYDOWN:
+                if active1:
+                    if event.key == pygame.K_BACKSPACE:
+                        text_Box1 = text_Box1[:-1]
+                    else:
+                        text_Box1 += event.unicode
+                elif active2:
+                    if event.key == pygame.K_BACKSPACE:
+                        text_Box2 = text_Box2[:-1]
+                    else:
+                        text_Box2 += event.unicode   
+                if event.key == pygame.K_RETURN:
+                    if whitePlayer == '':
+                        whitePlayer = 'Guest1'
+                    if blackPlayer == '':
+                        blackPlayer = 'Guest2'
+                    
+                    checkPlayers(whitePlayer,blackPlayer)
+                    startGame([],False,1,whitePlayer,blackPlayer)
+                    return
+        txt_surface1 = font.render(text_Box1, True, 'black')
+        txt_surface2 = font.render(text_Box2, True, 'black')
+        box1.w = 300
+        box2.w = 300
+
+        whitePlayer = text_Box1
+        blackPlayer = text_Box2
+
+        screen.blit(txt_surface1, (box1.x+10, box1.y))
+        screen.blit(txt_surface2, (box2.x+10, box2.y))
+
+        pygame.draw.rect(screen, color1,box1, 2)
+        pygame.draw.rect(screen, color2,box2, 2)
+
+        pygame.display.update()
+        clock.tick(30)
+
+def deletePlayer():
+    running = True
+    box1 = pygame.Rect(250,280,200,40)
+    color_inactive = pygame.Color('white')
+    color_active = pygame.Color('black')
+    color1 = color_inactive
+    text_Box1=''
+    active1 = False
+
+    while running:
+        screen.blit(background,(0,0))
+        screen.blit(frameEnd,(75,100))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                exit(0)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+
+                if box1.collidepoint(event.pos):
+                    color1 = color_active
+                    active1 = True
+                else:
+                    color1 = color_inactive
+                    active1 = False
+
+            elif event.type == pygame.KEYDOWN:
+                if active1:
+                    if event.key == pygame.K_BACKSPACE:
+                        text_Box1 = text_Box1[:-1]
+                    else:
+                        text_Box1 += event.unicode 
+                if event.key == pygame.K_RETURN:
+                    try:
+                        if getByName(deletedPlayer,con):
+                            delete(deletedPlayer,con)
+                            print('deleted succesfuly !!')
+                        else:
+                            print("not found!!")    
+                    except Exception as e:
+                        print(e)
+                        exit(0)    
+                    return
+        txt_surface1 = font.render(text_Box1, True, 'black')
+
+        box1.w = 300
+
+        deletedPlayer = text_Box1
+
+        screen.blit(txt_surface1, (box1.x+10, box1.y))
+
+        pygame.draw.rect(screen, color1,box1, 2)
+
+        pygame.display.update()
+        clock.tick(30)
+
+def loadData(data):
+    finalList=[]
+    name=''
+    for letter in range(len(data)):
+        if data[letter] == ',':
+            try:
+                if getByName(name,con):
+                    pass
+                else:
+                    finalList.append((name,0))
+            except Exception as e:
+                print(e)
+                exit(0)
+            name = ''
+        else:
+            name += data[letter]
+    try:        
+        if getByName(name,con):
+            pass
+        else:        
+            finalList.append((name,0))
+        load(finalList,con)            
+    except Exception as e:
+        print(e)
+        exit(0)
+    return
+
+def loadList():
+    running = True
+    input_box = pygame.Rect(10, 270, 500, 50)
+    color_inactive = pygame.Color('green')
+    color_active = pygame.Color('white')
+    color = color_inactive
+    active = False
+    user_input = ''
+
+    while running:
+        screen.blit(background, (0, 0))
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                exit(0)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if input_box.collidepoint(event.pos):
+                    active = True
+                    color = color_active
+                else:
+                    active = False
+                    color = color_inactive
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if data != '': 
+                        loadData(data)
+                    return
+                if active:
+                    if event.key == pygame.K_BACKSPACE:
+                        user_input = user_input[:-1]
+                    else:
+                        user_input += event.unicode
+
+        data = user_input
+
+        txt_surface = font.render(user_input, True, 'white')
+        input_box.w = 780
+        screen.blit(txt_surface, (input_box.x + 10, input_box.y + 10))
+        pygame.draw.rect(screen, color, input_box, 2)
+
+        pygame.display.update()
+        clock.tick(30)
+
+def leaderBoardList():
+    running = True
+
+    try:
+        data = read(con)
+    except Exception as e:
+        print(e)
+        exit(0)    
+
+    data.sort(key=lambda x: x[2], reverse=True)
+
+    while running:
+        screen.blit(background,(0,0))
+        screen.blit(leaderBoardFrame,(200,10))
+
+        title = font.render("Leaderboard", True, (255, 0, 0))
+        screen.blit(title, (300, 40))
+
+        y = 110
+        i = 1
+        for (id, name, score) in data[:10]:
+            text = font.render(f"{i}. {name}-{score}", True, (0, 0, 0))
+            screen.blit(text, (290, y))
+            y += 40
+            i += 1
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                exit(0)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                return
+            
+        pygame.display.update()
 
 def menu():
     choose = False
@@ -530,6 +780,9 @@ def menu():
     start_button = pygame.Rect(300, 250, 200, 50)
     quit_button = pygame.Rect(300, 400, 200, 50)
     loadButton = pygame.Rect(300, 325, 200, 50)
+    deleteButton = pygame.Rect(530,50, 200, 50)
+    loadbutton = pygame.Rect(200,50, 200, 50)
+    leaderBoard = pygame.Rect(295,540, 200, 50)
 
     while not choose:
         getIn = False
@@ -542,10 +795,16 @@ def menu():
         start_text = font.render("Start Game", True, (240,240,240))
         quit_text = font.render("Quit", True, (240,240,240))
         loadText = font.render("Load", True, (240,240,240))
+        deleteTxt = font.render("Delete", True, (250,0,0))
+        loadTxt = font.render("load", True, (0,128,0))
+        leaderTxt = font.render("Leader Board", True, (0,128,0))
 
         screen.blit(start_text, (start_button.x +20, start_button.y + 15))
         screen.blit(quit_text, (quit_button.x +60, quit_button.y ))
         screen.blit(loadText, (loadButton.x+60,loadButton.y))
+        screen.blit(deleteTxt, (530,50))
+        screen.blit(loadTxt, (200,50))
+        screen.blit(leaderTxt, (295,540))
 
         pos = pygame.mouse.get_pos()
 
@@ -565,7 +824,8 @@ def menu():
                 pos = pygame.mouse.get_pos()
                 if start_button.collidepoint(pos):
                     clickSound.play()
-                    choose = startGame([],False)
+                    provideName()
+                    choose = True
                     getIn = True
                 elif loadButton.collidepoint(pos):
                     clickSound.play()
@@ -576,23 +836,23 @@ def menu():
                     clickSound.play()
                     choose = True
                     pygame.quit()
-                    return
+                    exit(0)
+                elif deleteButton.collidepoint(pos):
+                    clickSound.play()
+                    deletePlayer()
+                elif loadbutton.collidepoint(pos):
+                    clickSound.play()
+                    loadList()   
+                elif leaderBoard.collidepoint(pos):
+                    clickSound.play()
+                    leaderBoardList()     
+
         if not getIn:
             pygame.display.update()
         clock.tick(60)           
-                    
+
+con = getConnection()
+
 if __name__ == "__main__":
-    """ try:
-        con = getConnection()
-        data = [('player_10',10),('player_11',11)]
-        create(('zoro',0),con)
-        load(data,con)
-        read(con)
-        if getByName('player_10',con):
-            print('exist')
-        else: 
-            print('! exist')    
-    except Exception as e:
-        print(e) """
     menu()
-                
+    
