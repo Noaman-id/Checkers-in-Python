@@ -3,15 +3,16 @@ def read(con):
     try:
         cursor = con.cursor()
         cursor.execute(query)
-        print(cursor.fetchall())
+        data = cursor.fetchall()
     except Exception as e:
         print(e)
     finally :
         if con:
             cursor.close()    
+        return data    
  
 def getByName(name,con):
-    query = 'select * from t_player where name=%s;'
+    query = 'select * from t_player where name like %s;'
     try:
         cursor = con.cursor()
         cursor.execute(query,(name,))
@@ -32,8 +33,6 @@ def load(data,con):
         cursor.executemany(query,data)
         con.commit()
     except Exception as e:
-        if con:
-            cursor.rollback()
         print(e)
     finally:
         if con:
@@ -46,8 +45,6 @@ def create(player,con):
         cursor.execute(query,player)
         con.commit()
     except Exception as e:
-        if con:
-            cursor.rollback()
         print(e)
     finally:
         if con:
@@ -57,15 +54,22 @@ def delete(player,con):
     query = 'delete from t_player where name like %s;'
     try:
         cursor = con.cursor()
-        cursor.execute(query,player)
+        cursor.execute(query,(player,))
         con.commit()
     except Exception as e:
-        if con:
-            cursor.rollback()
         print(e)
     finally:
         if con:
             cursor.close()
 
-def update():
-    pass
+def update(name,score,con):
+    query = 'update t_player set score=%s where name like %s;'
+    try:
+        cursor = con.cursor()
+        cursor.execute(query,(str(score),name))
+        con.commit()
+    except Exception as e:
+        print(e)
+    finally:
+        if con:
+            cursor.close()
