@@ -1,11 +1,16 @@
 from mysql import connector
+import os
 from dao import *
 import pygame
+from PIL import Image as GIF
 
 pygame.init()
 pygame.mixer.init()
 move_sound = pygame.mixer.Sound("./assets/move-self.mp3")
 clickSound = pygame.mixer.Sound("./assets/clickSound.wav")
+backNosie = pygame.mixer.Sound("./assets/backNoise.wav")
+backNosie.set_volume(0.03)
+typingClickSound = pygame.mixer.Sound("./assets/typingClick.mp3")
 clock = pygame.time.Clock()
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -14,6 +19,9 @@ FRAME_HEIGHT = 513
 BOARD_X = 115
 BOARD_Y = 69
 CUBE_SIZE= 50
+
+from PIL import Image
+import pygame
 
 font = pygame.font.Font("assets/fonts/Alkhemikal.ttf", 36)
 
@@ -67,7 +75,7 @@ leaderBoardFrame = pygame.transform.scale(leaderBoardFrame, (400, 590))
 def getConnection():
     return connector.connect(
         user='root', 
-        password='',
+        password='Noaman-2005',
         database='db_game',
         host='127.0.0.1',
         port=3306
@@ -85,6 +93,26 @@ class pieces:
 
     def draw(self,surface):
         surface.blit(self.image, (self.x,self.y))    
+
+def load_gif_frames(path, size):
+    gif = GIF.open(path)
+    frames = []
+    try:
+        while True:
+            frame = gif.convert('RGBA')
+            pygame_image = pygame.image.fromstring(frame.tobytes(), frame.size, 'RGBA')
+            pygame_image = pygame.transform.scale(pygame_image, size)
+            frames.append(pygame_image)
+            gif.seek(gif.tell() + 1)
+    except EOFError:
+        pass
+    return frames
+
+background_frames = load_gif_frames("./assets/background-purple.gif", (SCREEN_WIDTH, SCREEN_HEIGHT))
+frame_index = 0
+animation_timer = 0
+animation_speed = 100
+
 
 def draw_board(boardX,boardY):
     place_x= boardX
@@ -422,7 +450,17 @@ def canRecapture(xd, yd, piecesList):
 
     return available
 
+def draw_animated_background():
+    global frame_index, animation_timer
+    current_time = pygame.time.get_ticks()
+    if current_time - animation_timer > animation_speed:
+        frame_index = (frame_index + 1) % len(background_frames)
+        animation_timer = current_time
+    screen.blit(background_frames[frame_index], (0, 0))
+
 def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'Guest2'):
+    backNosie.stop()
+    
     saveButton = pygame.Rect(700, 20, 200, 50)
     saveText = font.render("Save", True, (200,0,0))
 
@@ -442,7 +480,7 @@ def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'G
     except Exception as e:
         print(e)
     if loaded == False:   
-        screen.blit(background, (0, 0))
+        draw_animated_background()
         screen.blit(frame, (100, -30))
         
         piecesList = deployPieces(BOARD_X, BOARD_Y)
@@ -452,7 +490,7 @@ def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'G
 
     while not game_end:
         
-        screen.blit(background, (0, 0))
+        draw_animated_background()
         screen.blit(frame, (100, -30))
         screen.blit(saveText,(700,20))
         screen.blit(whiteText,(BOARD_X+420,BOARD_Y+20))
@@ -555,7 +593,7 @@ def provideName():
     active2 = False
 
     while running:
-        screen.blit(background,(0,0))
+        draw_animated_background()
         screen.blit(frameEnd,(75,100))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -579,6 +617,7 @@ def provideName():
                     active2 = False
 
             elif event.type == pygame.KEYDOWN:
+                typingClickSound.play()
                 if active1:
                     if event.key == pygame.K_BACKSPACE:
                         text_Box1 = text_Box1[:-1]
@@ -625,7 +664,7 @@ def deletePlayer():
     active1 = False
 
     while running:
-        screen.blit(background,(0,0))
+        draw_animated_background()
         screen.blit(frameEnd,(75,100))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -640,6 +679,7 @@ def deletePlayer():
                     active1 = False
 
             elif event.type == pygame.KEYDOWN:
+                typingClickSound.play()
                 if active1:
                     if event.key == pygame.K_BACKSPACE:
                         text_Box1 = text_Box1[:-1]
@@ -706,7 +746,7 @@ def loadList():
     user_input = ''
 
     while running:
-        screen.blit(background, (0, 0))
+        draw_animated_background()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -720,6 +760,7 @@ def loadList():
                     color = color_inactive
 
             elif event.type == pygame.KEYDOWN:
+                typingClickSound.play()
                 if event.key == pygame.K_RETURN:
                     if data != '': 
                         loadData(data)
@@ -752,7 +793,7 @@ def leaderBoardList():
     data.sort(key=lambda x: x[2], reverse=True)
 
     while running:
-        screen.blit(background,(0,0))
+        draw_animated_background()
         screen.blit(leaderBoardFrame,(200,10))
 
         title = font.render("Leaderboard", True, (255, 0, 0))
@@ -775,8 +816,8 @@ def leaderBoardList():
 
 def menu():
     choose = False
-    screen.blit(background, (0, 0))
-    
+    draw_animated_background()
+    backNosie.play()
     start_button = pygame.Rect(300, 250, 200, 50)
     quit_button = pygame.Rect(300, 400, 200, 50)
     loadButton = pygame.Rect(300, 325, 200, 50)
@@ -786,11 +827,8 @@ def menu():
 
     while not choose:
         getIn = False
-        screen.blit(background, (0, 0))
-        screen.blit(menuFrame,(190,170))
-        screen.blit(torch,(0,0))
-        screen.blit(torch,(550,0))
-
+        draw_animated_background()
+        #screen.blit(menuFrame,(190,170))
 
         start_text = font.render("Start Game", True, (240,240,240))
         quit_text = font.render("Quit", True, (240,240,240))
