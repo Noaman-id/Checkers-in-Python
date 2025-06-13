@@ -3,6 +3,9 @@ import os
 from dao import *
 import pygame
 from PIL import Image as GIF
+import sys
+import time
+from datetime import datetime
 
 pygame.init()
 pygame.mixer.init()
@@ -103,6 +106,9 @@ eatCursor = pygame.transform.scale(eatCursor, (30, 30))
 backButton = pygame.image.load("./assets/backButton.png")
 backButton = pygame.transform.scale(backButton, (100, 50))
 
+Home = pygame.image.load("./assets/Home.png")
+Home = pygame.transform.scale(Home, (80, 60))
+
 def getConnection():
     return connector.connect(
         user='root', 
@@ -126,9 +132,13 @@ class pieces:
     def draw(self,surface):
         surface.blit(self.image, (self.x,self.y))    
 
-def draw_cursor(cursor_img):
-    x, y = pygame.mouse.get_pos()
-    screen.blit(cursor_img, (x-7, y-2))
+class TimeCl:
+    def __init__(self,startSeconds = 0):
+        self.startTime = time.time() - startSeconds
+
+    def getTime(self):
+        seconds =  int(time.time() - self.startTime)
+        return datetime.utcfromtimestamp(seconds).strftime("%H:%M:%S")
 
 def load_gif_frames(path, size):
     gif = GIF.open(path)
@@ -143,6 +153,24 @@ def load_gif_frames(path, size):
     except EOFError:
         pass
     return frames
+
+background_frames = load_gif_frames("./assets/background-purple.gif", (SCREEN_WIDTH, SCREEN_HEIGHT))
+frame_index = 0
+animation_timer = 0
+animation_speed = 100
+
+def draw_cursor(cursor_img):
+    x, y = pygame.mouse.get_pos()
+    screen.blit(cursor_img, (x-7, y-2))
+
+def draw_animated_background():
+    global frame_index, animation_timer
+    current_time = pygame.time.get_ticks()
+    
+    if current_time - animation_timer > animation_speed:
+        frame_index = (frame_index + 1) % len(background_frames)
+        animation_timer = current_time
+    screen.blit(background_frames[frame_index], (0, 0))
 
 def draw_board(boardX,boardY):
     place_x= boardX
@@ -198,11 +226,6 @@ def isSpotEmpty(piecesList,x,y):
             return piece
     return True
 
-background_frames = load_gif_frames("./assets/background-purple.gif", (SCREEN_WIDTH, SCREEN_HEIGHT))
-frame_index = 0
-animation_timer = 0
-animation_speed = 100
-
 def getColor(piecesList,x,y):
     if x < 0 or y < 0 or x > 7 or y > 7:
         return False
@@ -212,94 +235,77 @@ def getColor(piecesList,x,y):
         if piece_x == x and piece_y == y:
             return piece.color
 
-def availablePlaces(thePiece,piecesList,turn,extraMove):
-    available = []
-    thePieceSquareX = (thePiece.x - BOARD_X) // CUBE_SIZE
-    thePieceSquareY = (thePiece.y - BOARD_Y) // CUBE_SIZE
-    if thePiece.color == 'black'and turn == -1:
-        if isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY-1) == True:
-            square = pygame.Rect((thePiece.x-55,thePiece.y-55,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x-55,thePiece.y-55,thePiece,0,0))
+def get_piece_at(piecesList, x_idx, y_idx):
+        p = isSpotEmpty(piecesList, x_idx, y_idx)
+        return p if p is not True else None
+
+def availablePlaces(thePiece, piecesList, turn, extraMove):
+    if (turn == 1 and thePiece.color != 'white') or (turn == -1 and thePiece.color != 'black'):
+        return []
+
+    moves = []
+    directions = [(-1, -1), (+1, -1), (-1, +1), (+1, +1)]
+    start_x = thePiece.x
+    start_y = thePiece.y
+
+    for dx, dy in directions:
+        
+        if not thePiece.promoted:
             
-        elif isSpotEmpty(piecesList,thePieceSquareX-2,thePieceSquareY-2) == True and getColor(piecesList,thePieceSquareX-1,thePieceSquareY-1) == 'white':
-            square = pygame.Rect((thePiece.x-105,thePiece.y-105,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x-105,thePiece.y-105,thePiece,isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY-1)))
+            if (thePiece.color == 'white' and dy > 0) or (thePiece.color == 'black' and dy < 0):
+                nx = (start_x -5) + dx * CUBE_SIZE
+                ny = (start_y -5) + dy * CUBE_SIZE
+                xLand = (nx - BOARD_X) // CUBE_SIZE
+                yLand = (ny - BOARD_Y) // CUBE_SIZE
+                if 0 <= xLand < 8 and 0 <= yLand < 8 and isSpotEmpty(piecesList, xLand, yLand) == True and not extraMove:
+                    moves.append((nx, ny, thePiece, None))
 
-        if isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY-1) == True:
-            square = pygame.Rect((thePiece.x+45,thePiece.y-55,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x+45,thePiece.y-55,thePiece,0,0))
+            if extraMove != []:
+                cap_Landx = (start_x -5) + dx * CUBE_SIZE * 2
+                cap_Landy = (start_y -5) + dy * CUBE_SIZE * 2
+                cap_Landi = (cap_Landx - BOARD_X) // CUBE_SIZE
+                cap_Landj = (cap_Landy - BOARD_Y) // CUBE_SIZE
+                mid_i = (start_x + dx * CUBE_SIZE - BOARD_X) // CUBE_SIZE
+                mid_j = (start_y + dy * CUBE_SIZE - BOARD_Y) // CUBE_SIZE
+                mid_piece = get_piece_at(piecesList, mid_i, mid_j)
+                if (0 <= cap_Landi < 8 and 0 <= cap_Landj < 8 and isSpotEmpty(piecesList, cap_Landi, cap_Landj) == True and mid_piece is not None and mid_piece.color != thePiece.color):
+                    moves.append((cap_Landx, cap_Landy, thePiece, mid_piece))
+            else:
+                if (thePiece.color == 'white' and dy > 0) or (thePiece.color == 'black' and dy < 0):
+                    cap_Landx = (start_x -5) + dx * CUBE_SIZE * 2
+                    cap_Landy = (start_y -5) + dy * CUBE_SIZE * 2
+                    cap_Landi = (cap_Landx - BOARD_X) // CUBE_SIZE
+                    cap_Landj = (cap_Landy - BOARD_Y) // CUBE_SIZE
+                    mid_i = (start_x + dx * CUBE_SIZE - BOARD_X) // CUBE_SIZE
+                    mid_j = (start_y + dy * CUBE_SIZE - BOARD_Y) // CUBE_SIZE
+                    mid_piece = get_piece_at(piecesList, mid_i, mid_j)
+                    if (0 <= cap_Landi < 8 and 0 <= cap_Landj < 8 and isSpotEmpty(piecesList, cap_Landi, cap_Landj) == True and mid_piece is not None and mid_piece.color != thePiece.color):
+                        moves.append((cap_Landx, cap_Landy, thePiece, mid_piece))
+        else:
+            steps = 1
+            while True:
+                nx = (start_x -5) + dx * CUBE_SIZE * steps
+                ny = (start_y -5) + dy * CUBE_SIZE * steps
+                xi = (nx - BOARD_X) // CUBE_SIZE
+                yi = (ny - BOARD_Y) // CUBE_SIZE
+                if not (0 <= xi < 8 and 0 <= yi < 8):
+                    break
+                Eaten = get_piece_at(piecesList, xi, yi)
+                if Eaten is None:
+                    if not extraMove:
+                        moves.append((nx, ny, thePiece, None))
+                else:
+                    if Eaten.color != thePiece.color:
+                        capx = nx + dx * CUBE_SIZE
+                        capy = ny + dy * CUBE_SIZE
+                        capxi = (capx - BOARD_X) // CUBE_SIZE
+                        capyi = (capy - BOARD_Y) // CUBE_SIZE
+                        if 0 <= capxi < 8 and 0 <= capyi < 8 and isSpotEmpty(piecesList, capxi, capyi) == True:
+                            moves.append((capx, capy, thePiece, Eaten))
+                    break
+                steps += 1
 
-        elif isSpotEmpty(piecesList,thePieceSquareX+2,thePieceSquareY-2) == True and getColor(piecesList,thePieceSquareX+1,thePieceSquareY-1) == 'white':
-            square = pygame.Rect((thePiece.x+95,thePiece.y-105,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x+95,thePiece.y-105,thePiece,isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY-1)))   
-            
-        if thePiece.promoted == True or extraMove != None:
-            if isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY+1) == True:
-                square = pygame.Rect((thePiece.x-55,thePiece.y+45,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x-55,thePiece.y+45,thePiece,0,0))
-                
-            elif isSpotEmpty(piecesList,thePieceSquareX-2,thePieceSquareY+2) == True and getColor(piecesList,thePieceSquareX-1,thePieceSquareY+1) == 'white':
-                square = pygame.Rect((thePiece.x-105,thePiece.y+95,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x-105,thePiece.y+95,thePiece,isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY+1)))
-
-            if isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY+1) == True:
-                square = pygame.Rect((thePiece.x+45,thePiece.y+45,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x+45,thePiece.y+45,thePiece,0,0))
-
-            elif isSpotEmpty(piecesList,thePieceSquareX+2,thePieceSquareY+2) == True and getColor(piecesList,thePieceSquareX+1,thePieceSquareY+1) == 'white':
-                square = pygame.Rect((thePiece.x+95,thePiece.y+95,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x+95,thePiece.y+95,thePiece,isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY+1)))
-
-    elif thePiece.color == 'white'and turn == 1:
-        if isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY+1) == True:
-            square = pygame.Rect((thePiece.x-55,thePiece.y+45,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x-55,thePiece.y+45,thePiece,0,0))
-
-        elif isSpotEmpty(piecesList,thePieceSquareX-2,thePieceSquareY+2) == True and getColor(piecesList,thePieceSquareX-1,thePieceSquareY+1) == 'black':
-            square = pygame.Rect((thePiece.x-105,thePiece.y+95,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x-105,thePiece.y+95,thePiece,isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY+1)))
-
-        if isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY+1) == True:
-            square = pygame.Rect((thePiece.x+45,thePiece.y+45,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x+45,thePiece.y+45,thePiece,0,0))
-
-        elif isSpotEmpty(piecesList,thePieceSquareX+2,thePieceSquareY+2) == True and getColor(piecesList,thePieceSquareX+1,thePieceSquareY+1) == 'black':
-            square = pygame.Rect((thePiece.x+95,thePiece.y+95,CUBE_SIZE,CUBE_SIZE))
-            pygame.draw.rect(screen,(000,128,000), square)
-            available.append((thePiece.x+95,thePiece.y+95,thePiece,isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY+1)))    
-        if thePiece.promoted == True or extraMove != None:
-            if isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY-1) == True:
-                square = pygame.Rect((thePiece.x-55,thePiece.y-55,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x-55,thePiece.y-55,thePiece,0,0))
-                
-            elif isSpotEmpty(piecesList,thePieceSquareX-2,thePieceSquareY-2) == True and getColor(piecesList,thePieceSquareX-1,thePieceSquareY-1) == 'black':
-                square = pygame.Rect((thePiece.x-105,thePiece.y-105,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x-105,thePiece.y-105,thePiece,isSpotEmpty(piecesList,thePieceSquareX-1,thePieceSquareY-1)))
-
-            if isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY-1) == True:
-                square = pygame.Rect((thePiece.x+45,thePiece.y-55,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x+45,thePiece.y-55,thePiece,0,0))
-
-            elif isSpotEmpty(piecesList,thePieceSquareX+2,thePieceSquareY-2) == True and getColor(piecesList,thePieceSquareX+1,thePieceSquareY-1) == 'black':
-                square = pygame.Rect((thePiece.x+95,thePiece.y-105,CUBE_SIZE,CUBE_SIZE))
-                pygame.draw.rect(screen,(000,128,000), square)
-                available.append((thePiece.x+95,thePiece.y-105,thePiece,isSpotEmpty(piecesList,thePieceSquareX+1,thePieceSquareY-1)))    
-
-    return available
+    return moves
 
 def selectedPiece(pos,piecesList,turn,extraMove):
 
@@ -316,15 +322,14 @@ def selectedPiece(pos,piecesList,turn,extraMove):
                 piece.image = selectedBlackPromo if piece.promoted else selectedBlack
             else:
                 piece.image = selectedWhitePromo if piece.promoted else selectedWhite
-
+            
             return availablePlaces(piece, piecesList, turn,extraMove)
-
+                
     return []
 
 def isPieceSelectedForEat(pos,turn,piecesList):
     for piece in piecesList:
-        if pygame.Rect(piece.x, piece.y, 40, 40).collidepoint(pos):
-            
+        if pygame.Rect(piece.x, piece.y, 50, 50).collidepoint(pos):
             if turn == 1 and piece.color == 'black':
                 return piece
             elif  turn == -1 and piece.color == 'white':
@@ -364,25 +369,39 @@ def checkGameOver(piecesList,whitePlayer,blackPlayer):
             winnerAnnouce = font.render(f'{whitePlayer} you won',True,(0,0,0))    
         while quit == False:
             draw_animated_background()
-            draw_cursor(newCursor)
-            screen.blit(frameEnd,(75,100))
+            
+            screen.blit(frameEnd,(150,120))
             screen.blit(winner,(270,250))
             screen.blit(winnerAnnouce,(290,300))
             for event in pygame.event.get():
                 if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.QUIT:
                     quit = True
+            draw_cursor(newCursor)        
             pygame.display.update()        
         return True
     return False
 
-def saveGame(piecesList,turn,whitePlayer,blackPlayer):
+def saveGame(piecesList,turn,whitePlayer,blackPlayer,gameHistory,Time):
     
     with open('data.txt','w') as f:
 
         f.write(str(turn) + '\n')
         f.write(whitePlayer + '\n')
         f.write(blackPlayer + '\n')
+        f.write(str(Time) + '\n')
 
+        f.write(str(len(gameHistory)) + '\n')
+        for history in gameHistory:
+            f.write(history[0] + '\n')
+            f.write(str(history[1]) + '\n')
+            f.write(str(history[2][0]) + '\n')
+            f.write(str(history[2][1]) + '\n')
+            f.write(str(history[3][0]) + '\n')
+            f.write(str(history[3][1]) + '\n')
+            f.write(str(history[4][0]) + '\n')
+            f.write(str(history[4][1]) + '\n')
+            f.write(str(history[5][0]) + '\n')
+            f.write(str(history[5][1]) + '\n')
 
         for piece in piecesList:
             f.write(str(piece.color) + '\n')
@@ -395,8 +414,26 @@ def loadGame():
         turn = int(f.readline().strip())
         whitePlayer = f.readline().strip()
         blackPlayer = f.readline().strip()
-        piecesList= []
+        Time = f.readline().strip()
+        h,m,s = map(int, Time.split(':'))
+        Time = h*3600 + m *60 + s
+        gameHistory = []
+        history = int(f.readline().strip())
+        for iterator in range(history):
+            color = f.readline().strip()
+            promo = True if f.readline().strip() == 'True' else False
+            xInitP = int(f.readline().strip())
+            yInitP = int(f.readline().strip())
+            xP = int(f.readline().strip())
+            yP = int(f.readline().strip())
+            cap = True if f.readline().strip() == 'True' else False
+            promocap = True if f.readline().strip() == 'True' else False
+            caped_x = int(f.readline().strip())
+            caped_y = int(f.readline().strip())
 
+            gameHistory.append((color,promo,(xInitP,yInitP),(xP,yP),(cap,promocap),(caped_x,caped_y),[]))
+        
+        piecesList= []
         while True:
             color = f.readline().strip()
             if color == '':
@@ -414,174 +451,93 @@ def loadGame():
             piece.promoted = promoted
             piecesList.append(piece)
 
-    return startGame(piecesList,True,turn,whitePlayer,blackPlayer)
+    return startGame(piecesList,True,turn,whitePlayer,blackPlayer,gameHistory,Time)
 
-def canRecapture(xd, yd, piecesList):
+def canRecapture(xd, yd, piecesList,turn ,extraMove):
 
-    px = (xd - BOARD_X) // CUBE_SIZE
-    py = (yd - BOARD_Y) // CUBE_SIZE
-
-    thePiece = None
     for piece in piecesList:
-        bx = (piece.x - BOARD_X) // CUBE_SIZE
-        by = (piece.y - BOARD_Y) // CUBE_SIZE
-        if bx == px and by == py:
-            thePiece = piece
+        if piece.x == xd and piece.y == yd :
             break
-    if not thePiece:
+
+    available = availablePlaces(piece,piecesList,turn,extraMove)     
+    can = False
+    for index in available:
+        if index[-1] is not None:
+            can = True
+
+    if can == True:
+        return available
+    else:
         return []
 
-    available = []
-
-    if thePiece.color == 'white':
-        mid = isSpotEmpty(piecesList, px+1, py+1)
-        if mid is not True and getColor(piecesList, px+1, py+1) == 'black' and isSpotEmpty(piecesList, px+2, py+2) == True:
-            sx = BOARD_X + (px+2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py+2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
-        mid = isSpotEmpty(piecesList, px-1, py+1)
-        if mid is not True and getColor(piecesList, px-1, py+1) == 'black' and isSpotEmpty(piecesList, px-2, py+2) == True:
-            sx = BOARD_X + (px-2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py+2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
+def canPieceBeAte(Eaten,piecesList, turn,extra = [],force = False):
+    for piece in piecesList:
+        avilable =  availablePlaces(piece,piecesList,turn,extra)
         
-        mid = isSpotEmpty(piecesList, px+1, py-1)
-        if mid is not True and getColor(piecesList, px+1, py-1) == 'black' and isSpotEmpty(piecesList, px+2, py-2) == True:
-            sx = BOARD_X + (px+2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py-2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
-        mid = isSpotEmpty(piecesList, px-1, py-1)
-        if mid is not True and getColor(piecesList, px-1, py-1) == 'black' and isSpotEmpty(piecesList, px-2, py-2) == True:
-            sx = BOARD_X + (px-2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py-2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
-    else:  
-
-        mid = isSpotEmpty(piecesList, px+1, py-1)
-        if mid is not True and getColor(piecesList, px+1, py-1) == 'white' and isSpotEmpty(piecesList, px+2, py-2) == True:
-            sx = BOARD_X + (px+2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py-2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
-        mid = isSpotEmpty(piecesList, px-1, py-1)
-        if mid is not True and getColor(piecesList, px-1, py-1) == 'white' and isSpotEmpty(piecesList, px-2, py-2) == True:
-            sx = BOARD_X + (px-2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py-2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
-
-        mid = isSpotEmpty(piecesList, px+1, py+1)
-        if mid is not True and getColor(piecesList, px+1, py+1) == 'white' and isSpotEmpty(piecesList, px+2, py+2) == True:
-            sx = BOARD_X + (px+2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py+2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
-        mid = isSpotEmpty(piecesList, px-1, py+1)
-        if mid is not True and getColor(piecesList, px-1, py+1) == 'white' and isSpotEmpty(piecesList, px-2, py+2) == True:
-            sx = BOARD_X + (px-2)*CUBE_SIZE + 5
-            sy = BOARD_Y + (py+2)*CUBE_SIZE + 5
-            pygame.draw.rect(screen, (0,128,0), (sx, sy, CUBE_SIZE, CUBE_SIZE))
-            available.append((sx, sy, thePiece, mid))
-
-    return available
-
-def draw_animated_background():
-    global frame_index, animation_timer
-    current_time = pygame.time.get_ticks()
-    if current_time - animation_timer > animation_speed:
-        frame_index = (frame_index + 1) % len(background_frames)
-        animation_timer = current_time
-    screen.blit(background_frames[frame_index], (0, 0))
-
-def canPieceBeAte(Eaten,piecesList,extra):
-    EatenX = (Eaten.x - BOARD_X)// CUBE_SIZE
-    EatenY = (Eaten.y - BOARD_Y)// CUBE_SIZE
-    if Eaten.color == 'white':
-        for piece in piecesList:
-            piece_x = (piece.x - BOARD_X) // CUBE_SIZE
-            piece_y = (piece.y - BOARD_Y) // CUBE_SIZE
-            if piece.color != Eaten.color:
-                if (piece_x == EatenX-1 and piece_y == EatenY+1 and isSpotEmpty(piecesList,EatenX+1,EatenY-1)):
-                    return (piece,(EatenX+1,EatenY-1))
-                elif (piece_x == EatenX+1 and piece_y == EatenY+1 and isSpotEmpty(piecesList,EatenX-1,EatenY-1)):
-                    return (piece,(EatenX-1,EatenY-1))
-                if extra != None or piece.promoted:
-                    if (piece_x == EatenX+1 and piece_y == EatenY-1 and isSpotEmpty(piecesList,EatenX-1,EatenY+1)):
-                        return (piece,(EatenX-1,EatenY+1))
-                    elif (piece_x == EatenX-1 and piece_y == EatenY-1 and isSpotEmpty(piecesList,EatenX+1,EatenY+1)):
-                        return (piece,(EatenX+1,EatenY+1))
-    else :      
-        for piece in piecesList:
-            piece_x = (piece.x - BOARD_X) // CUBE_SIZE
-            piece_y = (piece.y - BOARD_Y) // CUBE_SIZE
-            if piece.color != Eaten.color:
-                if (piece_x == EatenX+1 and piece_y == EatenY-1 and isSpotEmpty(piecesList,EatenX-1,EatenY+1)):
-                    return (piece,(EatenX-1,EatenY+1))
-                elif (piece_x == EatenX-1 and piece_y == EatenY-1 and isSpotEmpty(piecesList,EatenX+1,EatenY+1)):
-                    return (piece,(EatenX+1,EatenY+1))
-                if extra != None or piece.promoted:
-                    if (piece_x == EatenX+1 and piece_y == EatenY-1 and isSpotEmpty(piecesList,EatenX-1,EatenY+1)): 
-                        return (piece,(EatenX-1,EatenY+1))
-                    elif (piece_x == EatenX-1 and piece_y == EatenY-1 and isSpotEmpty(piecesList,EatenX+1,EatenY+1)):
-                        return (piece,(EatenX+1,EatenY+1))
-    return None                       
-
-def Nfakh(gameHistory, piecesList, extra=None):
+        for move in avilable:
+            Exi = (Eaten.x  - BOARD_X)// CUBE_SIZE  
+            Eyi = (Eaten.y  - BOARD_Y)// CUBE_SIZE
+            if move[-1] is not None:
+                Xi = (move[-1].x  - BOARD_X)// CUBE_SIZE
+                Yi = (move[-1].y  - BOARD_Y)// CUBE_SIZE
+                capX = (move[0]  - BOARD_X)// CUBE_SIZE
+                capY = (move[1]  - BOARD_Y)// CUBE_SIZE
+                if  Xi == Exi and Yi == Eyi:
+                    
+                    if force == False:
+                        return ( move[2],(Xi,Yi))
+                    else:
+                        return ( move[2],(capX,capY))
+    return None
+                   
+def Nfakh( gameHistory, piecesList,turn):
+    
     if len(gameHistory) < 2:
         return
+    
+    for piece in piecesList:
+        if (piece.x, piece.y) == gameHistory[-1][3] and piece.color == gameHistory[-1][0] and piece.promoted == gameHistory[-1][1]:
+            (piece.x, piece.y) = gameHistory[-1][2] 
+            movedPiece = piece
+            break 
 
-    # Get the previous move (the one before the last)
-    prev_move = gameHistory[-2]
-    color = prev_move[0]
-    promoted = prev_move[1]
-    old_pos = prev_move[2]
-    new_pos = prev_move[3]
-
-    # 1. Roll back the board to before the last move
-    temp_pieces = deployPieces(BOARD_X, BOARD_Y)
-    for move in gameHistory[:-1]:
-        for piece in temp_pieces:
-            if (piece.x, piece.y) == move[2] and piece.color == move[0] and piece.promoted == move[1]:
-                piece.x, piece.y = move[3]
-                piece.promoted = move[1]
-                if move[4]:  # If a capture happened
-                    cap_x = (move[2][0] + move[3][0]) // 2
-                    cap_y = (move[2][1] + move[3][1]) // 2
-                    for p in temp_pieces:
-                        if (p.x, p.y) == (cap_x, cap_y) and p.color != move[0]:
-                            temp_pieces.remove(p)
-                            break
-                break
-
-    # 2. Find the piece that moved in the previous move
-    for piece in temp_pieces:
-        if (piece.x, piece.y) == new_pos and piece.color == color and piece.promoted == promoted:
-            # 3. Check if it had a forced capture at that state
-            missed_eat = canPieceBeAte(piece, temp_pieces, extra)
+    for temp_piece in piecesList:
+        if temp_piece.color != movedPiece.color:
+            missed_eat =  canPieceBeAte(temp_piece,piecesList,turn)
+            
             if missed_eat is not None:
-                # 4. Remove the piece from the current board
-                for real_piece in piecesList:
-                    if (real_piece.x, real_piece.y) == new_pos and real_piece.color == color and real_piece.promoted == promoted:
-                        piecesList.remove(real_piece)
-                        return
-            break
+                gameHistory.append((missed_eat[0].color,movedPiece.promoted,(-1,-1),(missed_eat[0].x,missed_eat[0].y),(True,missed_eat[0].promoted),(missed_eat[0].x,missed_eat[0].y),[]))
+                if missed_eat[0] != movedPiece:
+                    (movedPiece.x,movedPiece.y) = gameHistory[-2][3]
+                return missed_eat[0]
+                        
+    (movedPiece.x,movedPiece.y) = gameHistory[-1][3]
+    return None
+    
+def forceToEat(Cursor,pos,turn,piecesList,gameHistory,extraMove):
+    if Cursor == eatCursor and isPieceSelectedForEat(pos,turn,piecesList) != None:
+        Eaten = isPieceSelectedForEat(pos,turn,piecesList)
+        if canPieceBeAte(Eaten,piecesList,turn,extraMove,True) != None:
+            
+            Eater,(X,Y) = canPieceBeAte(Eaten,piecesList,turn,extraMove,True)
+            
+            initEaterX = Eater.x
+            initEaterY = Eater.y
+            Eater.x=BOARD_X + X * CUBE_SIZE +5
+            Eater.y=BOARD_Y + Y * CUBE_SIZE +5
+            gameHistory.append((Eater.color,Eater.promoted,(initEaterX,initEaterY),(Eater.x,Eater.y),(True,Eater.promoted),(Eaten.x,Eaten.y),extraMove))
+            piecesList.remove(Eaten)
+            Cursor = newCursor
+            extraMove = canRecapture(Eater.x,Eater.y,piecesList,turn,extraMove)
+            if extraMove == []:
+                return turn*-1
+    return turn            
 
 def reSummenDeadSoliders(gameHistory,piecesList):
     move = gameHistory[-1]
-    if move[-1][0] == True:
-        deadX = (move[2][0] + move[3][0]) // 2
-        deadY = (move[2][1] + move[3][1]) // 2
+    
+    if move[-3][0] == True:
+        
         promoted = move[4][1]
         color = 'black' if move[0] == 'white' else 'white'
         
@@ -590,13 +546,59 @@ def reSummenDeadSoliders(gameHistory,piecesList):
         else:
             image = promoBlack if promoted else blackPiece
         
-        piecesList.append(pieces(deadX,deadY,color,image,promoted))
-        
-def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'Guest2'):
-    gameHistory = []
+        piecesList.append(pieces(move[-2][0],move[-2][1],color,image,promoted))
     
+def takeback(gameHistory,piecesList):
+    if len(gameHistory) > 0 :
+        move = gameHistory[-1]
+        
+        if move[2][0] == -1 and move[2][1] == -1:
+        
+            deadX,deadY = move[3]
+            promoted = move[4][1]
+            color = move[0]
+
+            if color == 'white':
+                image = promoWhite if promoted else whitePiece
+            else:
+                image = promoBlack if promoted else blackPiece
+
+            piecesList.append(pieces(deadX,deadY,color,image,promoted))
+            for piece in piecesList:
+                if (piece.x,piece.y) == gameHistory[-2][3]:
+                    (piece.x,piece.y) = gameHistory[-2][2]
+            
+            gameHistory.pop()
+        else:
+            for piece in piecesList:
+                if (piece.x,piece.y) == move[3]:
+                    (piece.x,piece.y) = move[2]
+            reSummenDeadSoliders(gameHistory,piecesList)
+            
+            gameHistory.pop()
+        extra = []    
+        if gameHistory != []:    
+            extra = gameHistory[-1][-1]
+        return extra
+    return None
+
+def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'Guest2',gameHistory = [], PreTime = 0):
+    
+    if loaded == True:
+        for piece in piecesList:
+            if piece.promoted == True:
+                piece.image = promoBlack if piece.color == 'black' else promoWhite
+            else:
+                piece.image= blackPiece if piece.color == 'black' else whitePiece
+    else:
+        turn = 1
+        gameHistory = []
     backNosie.stop()
     
+    time = TimeCl(PreTime)
+
+    HomeButton = pygame.Rect(10,20,60,50)
+
     saveButton = pygame.Rect(700, 20, 200, 50)
     saveText = font.render("Save", True, (200,0,0))
 
@@ -618,42 +620,49 @@ def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'G
             blackScore = font.render(blackScore,True,(240,240,240))
     except Exception as e:
         print(e)
+
     if loaded == False:   
         draw_animated_background()
         screen.blit(frame, (100, -30))
-        
         piecesList = deployPieces(BOARD_X, BOARD_Y)
+
     game_end = False 
     availablePlaces = []
-    selected_piece = None
-
-    if whitePlayer != 'Guest1':
-        screen.blit(whiteScore,(BOARD_X+420,BOARD_Y+65))
-    if blackPlayer != 'Guest2':
-        screen.blit(blackScore,(BOARD_X+420,BOARD_Y+300))
     
-    extraMove = []
+    extraMove = []  
     quit = False
     Cursor = newCursor
+    tookback = False
+
     while not game_end:
+        CurrentTime = time.getTime()
+        TimeText = font.render(CurrentTime, True, (240,240,240))
+
         draw_animated_background()
         screen.blit(frame, (100, -30))
         screen.blit(saveText,(700,20))
         screen.blit(whiteText,(BOARD_X+420,BOARD_Y+20))
         screen.blit(blackText,(BOARD_X+420,BOARD_Y+345))
+        screen.blit(Home,(10,20))
 
         draw_board(BOARD_X, BOARD_Y)
+
+        if whitePlayer != 'Guest1':
+            screen.blit(whiteScore,(BOARD_X+420,BOARD_Y+65))
+        if blackPlayer != 'Guest2':
+            screen.blit(blackScore,(BOARD_X+420,BOARD_Y+300))
+    
         for piece in piecesList:
             piece.draw(screen)
-            
+
             pieceX = (piece.x - BOARD_X) // CUBE_SIZE
             pieceY = (piece.y - BOARD_Y) // CUBE_SIZE
             if piece.color == 'white':
-                if pieceX in {0, 2, 4, 6} and pieceY == 7: 
+                if pieceX in {0, 2, 4, 6} and pieceY == 7 and piece.image != selectedWhitePromo: 
                     piece.promoted = True
                     piece.image = promoWhite
             else:
-                if pieceX in {1, 3, 5, 7} and pieceY == 0: 
+                if pieceX in {1, 3, 5, 7} and pieceY == 0 and piece.image != selectedBlackPromo: 
                     piece.promoted = True
                     piece.image = promoBlack
 
@@ -665,45 +674,40 @@ def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'G
                 quit = True
                 
             if event.type == pygame.MOUSEBUTTONDOWN:
+                
                 pos = pygame.mouse.get_pos()
                 moved = False
-                if Cursor == eatCursor and isPieceSelectedForEat(pos,turn,piecesList) != None:
-                    Eaten = isPieceSelectedForEat(pos,turn,piecesList)
-                    if canPieceBeAte(Eaten,piecesList,extraMove)!=None:
-                        Eater,(X,Y) = canPieceBeAte(Eaten,piecesList,extraMove)
-                        Eater.x=BOARD_X + X * CUBE_SIZE +5
-                        Eater.y=BOARD_Y + Y * CUBE_SIZE +5
-                        piecesList.remove(Eaten)
-                        Cursor = newCursor
-                        extraMove = canRecapture(Eater.x,Eater.y,piecesList)
-                        if extraMove == []:
-                            turn *= -1 
+                turn = forceToEat(Cursor,pos,turn,piecesList,gameHistory,extraMove)
+
                 if takeBackButton.collidepoint(pos):
                     clickSound.play()
-                    if gameHistory != []:
-                        for piece in piecesList:
-                            if piece.x == gameHistory[len(gameHistory)-1][3][0] and piece.y == gameHistory[len(gameHistory)-1][3][1]:
-                                piecesList.remove(piece)
-                                color = gameHistory[-1][0]
-                                promoted = gameHistory[-1][4][1]
-                                x = gameHistory[len(gameHistory)-1][2][0]
-                                y = gameHistory[len(gameHistory)-1][2][1]
-                                if color == 'white'and not promoted:
-                                    piecesList.append(pieces(x,y,color,whitePiece,promoted))
-                                elif color == 'white'and promoted:
-                                    piecesList.append(pieces(x,y,color,promoWhite,promoted))
-                                elif color == 'black' and promoted:
-                                    piecesList.append(pieces(x,y,color,promoBlack,promoted))
-                                else:
-                                    piecesList.append(pieces(x,y,color,blackPiece,promoted))
-                        reSummenDeadSoliders(gameHistory,piecesList)
-                        gameHistory.pop()
-                        turn *= -1
-
+                    extraMove = takeback(gameHistory,piecesList)
+                    tookback = True
+                    if len(gameHistory) > 0:
+                        if extraMove != []:
+                            if gameHistory[-1][0] == 'white':
+                                turn = 1
+                            else:
+                                turn = -1  
+                        elif extraMove == []:
+                            
+                            if gameHistory[-1][0] == 'white':
+                                turn = -1
+                            else:
+                                turn = 1
+                    else: 
+                        turn = 1
+                    
                 if saveButton.collidepoint(pos):
-                    saveGame(piecesList,turn,whitePlayer,blackPlayer)
+                    saveGame(piecesList,turn,whitePlayer,blackPlayer,gameHistory,CurrentTime)
                     return True
 
+                if HomeButton.collidepoint(pos):
+                    clickSound.play()
+                    turn = 1
+                    gameHistory = []
+                    return True
+                
                 if forceButton.collidepoint(pos):
                     clickSound.play()
                     if Cursor == newCursor:
@@ -713,37 +717,70 @@ def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'G
                         
                 for click in availablePlaces:
                     if pygame.Rect(click[0], click[1], CUBE_SIZE, CUBE_SIZE).collidepoint(pos):
-                        #Nfakh(gameHistory,piecesList,extraMove)
+                        
+                        for p in piecesList:
+                            if p.image == selectedBlack:
+                                p.image = blackPiece
+                            elif p.image == selectedBlackPromo:
+                                p.image = promoBlack
+                            elif p.image == selectedWhite:
+                                p.image = whitePiece
+                            elif p.image == selectedWhitePromo:
+                                p.image = promoWhite
+
                         lastMoveCap = False
                         wasPromo = False
                         if click[3]:  
                             wasPromo = click[3].promoted
+                            capedX = click[3].x
+                            capedY = click[3].y
                             piecesList.remove(click[3])
                             lastMoveCap=True
-
+                        
                         initX = click[2].x
                         initY = click[2].y
                         click[2].x = click[0] + 5
                         click[2].y = click[1] + 5
                         move_sound.play()
-                        extraMove = []
+                        print('before:',extraMove)
+                        
+                        if lastMoveCap == True:                    
+                            extraMove = canRecapture(click[2].x,click[2].y,piecesList,turn,extraMove)
+
+                        if extraMove == [] and tookback == False:
+                            print('turn no extra')
+                            turn *= -1
+                        elif extraMove != [] and tookback == False:
+                            print('turn extra')
+                            pass
+                        if tookback == True:
+                            print('3')
+                            if len(gameHistory) < 1 or gameHistory[-1][-1] == []:
+                                turn *= -1
+                            tookback = False
+
+                        
+                        print('after:',extraMove)
 
                         if lastMoveCap == True:     
-                            gameHistory.append((click[2].color,click[2].promoted,(initX,initY),(click[2].x,click[2].y),(True,wasPromo)))                     
-                            extraMove = canRecapture(click[2].x,click[2].y,piecesList)
+                            gameHistory.append((click[2].color,click[2].promoted,(initX,initY),(click[2].x,click[2].y),(True,wasPromo),(capedX,capedY),extraMove))                     
                         else:    
-                            gameHistory.append((click[2].color,click[2].promoted,(initX,initY),(click[2].x,click[2].y),(False,wasPromo)))    
-                        if extraMove == []:
-                            turn *= -1
-                            extraMove = None
+                            gameHistory.append((click[2].color,click[2].promoted,(initX,initY),(click[2].x,click[2].y),(False,wasPromo),(-1,-1),extraMove))    
+
+
+                        if lastMoveCap == False:
+                            pieceMnfokha = Nfakh(gameHistory,piecesList,turn*-1)    
+                            if  pieceMnfokha != None:
+                                piecesList.remove(pieceMnfokha)
+                                
                         moved = True
                         break
-                
                 availablePlaces = []
                 
                 if not moved:
-                    availablePlaces = selectedPiece(pos, piecesList,turn,extraMove) or []
-                
+                    availablePlaces = selectedPiece(pos, piecesList,turn,extraMove) or []        
+            
+        screen.blit(TimeText,(540,290))
         screen.blit(forceEat,(530,230)) 
         screen.blit(backButton,(590,230))           
         draw_cursor(Cursor)        
@@ -752,7 +789,7 @@ def startGame(piecesList,loaded,turn = 1,whitePlayer = 'Guest1',blackPlayer = 'G
 
         game_end = checkGameOver(piecesList,whitePlayer,blackPlayer)
         if quit == True:
-            pygame.quit()
+            sys.exit()
 
 def checkPlayers(whitePlayer,blackPlayer):
     running = True
@@ -1094,7 +1131,6 @@ def menu():
                 elif loadButton.collidepoint(pos):
                     clickSound.play()
                     loadGame()
-                    choose= True
                     getIn = True    
                 elif quit_button.collidepoint(pos):
                     clickSound.play()
