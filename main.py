@@ -12,7 +12,7 @@ pygame.mixer.init()
 move_sound = pygame.mixer.Sound("./assets/move-self.mp3")
 clickSound = pygame.mixer.Sound("./assets/clickSound.wav")
 backNosie = pygame.mixer.Sound("./assets/backNoise.wav")
-backNosie.set_volume(0.03)
+backNosie.set_volume(0.3)
 typingClickSound = pygame.mixer.Sound("./assets/typingClick.mp3")
 clock = pygame.time.Clock()
 SCREEN_WIDTH = 800
