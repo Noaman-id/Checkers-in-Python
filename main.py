@@ -7,6 +7,7 @@ import sys
 import time
 from datetime import datetime
 
+
 pygame.init()
 pygame.mixer.init()
 move_sound = pygame.mixer.Sound("./assets/move-self.mp3")
@@ -22,9 +23,6 @@ FRAME_HEIGHT = 513
 BOARD_X = 115
 BOARD_Y = 69
 CUBE_SIZE= 50
-
-from PIL import Image
-import pygame
 
 font = pygame.font.Font("assets/fonts/Alkhemikal.ttf", 36)
 
@@ -159,10 +157,6 @@ frame_index = 0
 animation_timer = 0
 animation_speed = 100
 
-def draw_cursor(cursor_img):
-    x, y = pygame.mouse.get_pos()
-    screen.blit(cursor_img, (x-7, y-2))
-
 def draw_animated_background():
     global frame_index, animation_timer
     current_time = pygame.time.get_ticks()
@@ -171,6 +165,10 @@ def draw_animated_background():
         frame_index = (frame_index + 1) % len(background_frames)
         animation_timer = current_time
     screen.blit(background_frames[frame_index], (0, 0))
+
+def draw_cursor(cursor_img):
+    x, y = pygame.mouse.get_pos()
+    screen.blit(cursor_img, (x-7, y-2))
 
 def draw_board(boardX,boardY):
     place_x= boardX
